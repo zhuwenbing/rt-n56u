@@ -177,6 +177,12 @@ endif
 dir_$(TROJAN_ENABLE) 			+= trojan
 dir_$(CONFIG_FIRMWARE_INCLUDE_REDSOCKS)			+= redsocks
 dir_$(CONFIG_FIRMWARE_INCLUDE_3PROXY)			+= 3proxy
+dir_$(CONFIG_FIRMWARE_INCLUDE_LDNS) += ldns
+
+# Only require the openssl build target for ldns when the openssl executable is requested
+ifeq ($(CONFIG_FIRMWARE_INCLUDE_OPENSSL_EXE),y)
+ldns: openssl
+endif
 
 ifdef CONFIG_BLK_DEV_SD
 dir_$(CONFIG_FIRMWARE_INCLUDE_HDPARM)		+= hdparm
