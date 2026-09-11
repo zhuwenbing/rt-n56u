@@ -4,7 +4,11 @@
 
 LDNS_VER := 1.8.4
 LDNS_TAR := ldns-$(LDNS_VER).tar.gz
-LDNS_URL := https://mirror.ghproxy.com/https://nlnetlabs.nl/downloads/ldns/$(LDNS_TAR)
+# primary + fallbacks
+LDNS_URLS := \
+	https://mirror.ghproxy.com/https://nlnetlabs.nl/downloads/ldns/$(LDNS_TAR) \
+	https://nlnetlabs.nl/downloads/ldns/$(LDNS_TAR) \
+	https://github.com/NLnetLabs/ldns/releases/download/$(LDNS_VER)/$(LDNS_TAR)
 LDNS_SHA256 := 58f976f4c347b75c1b815430e80a40687a2671714ab4c4bc6d448b5c4a6cfd45
 LDNS_SRC_DIR := $(CURDIR)/ldns-$(LDNS_VER)
 BUILD_DIR := $(BUILD_TOP)/user/ldns
@@ -28,10 +32,21 @@ CONFIGURE_OPTS = \
 	--disable-gost \
 	--disable-dane
 
-# download + sha256 verify
+# download + sha256 verify, with retries and fallbacks
 $(LDNS_TAR):
-	wget -O $@ $(LDNS_URL)
-	echo "$(LDNS_SHA256)  $@" | sha256sum -c
+	@echo "Downloading $(LDNS_TAR)..."
+	@rm -f $@
+	@set -e; \
+	for url in $(LDNS_URLS); do \
+	  echo "Trying $$url"; \
+	  if wget --tries=3 --timeout=30 -O $@ "$$url"; then \
+	    echo "Downloaded from $$url"; break; \
+	  else \
+	    echo "Failed: $$url"; continue; \
+	  fi; \
+	done; \
+	[ -f $@ ] || (echo "ERROR: Unable to download $(LDNS_TAR) from any mirror" && exit 1); \
+	echo "$(LDNS_SHA256)  $@" | sha256sum -c -
 
 # extract marker
 $(LDNS_SRC_DIR)/.extracted: $(LDNS_TAR)
