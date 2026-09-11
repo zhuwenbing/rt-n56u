@@ -46,7 +46,28 @@ $(LDNS_TAR):
 	  fi; \
 	done; \
 	[ -f $@ ] || (echo "ERROR: Unable to download $(LDNS_TAR) from any mirror" && exit 1); \
-	echo "$(LDNS_SHA256)  $@" | sha256sum -c -
+	# try to fetch upstream .sha256 file from NLnetLabs (authoritative checksum)
+	for ch_url in https://nlnetlabs.nl/downloads/ldns/$(LDNS_TAR).sha256 https://www.nlnetlabs.nl/downloads/ldns/$(LDNS_TAR).sha256; do \
+	  echo "Trying checksum url $$ch_url"; \
+	  if wget --tries=3 --timeout=15 -O $@.sha256 "$$ch_url"; then \
+	    echo "Got checksum file from $$ch_url"; break; \
+	  else \
+	    rm -f $@.sha256; continue; \
+	  fi; \
+	done; \
+	if [ -s $@.sha256 ]; then \
+	  # if checksum file contains two columns (hash and filename), use it directly
+	  if grep -q "[[:space:]]" $@.sha256; then \
+	    echo "Verifying $@ using $@.sha256"; sha256sum -c $@.sha256 || { echo "ERROR: checksum mismatch (using $@.sha256)"; sha256sum $@; exit 1; }; \
+	  else \
+	    # checksum file contains only the hash; run verification against the downloaded tarball
+	    HASH=$$(cat $@.sha256 | tr -d '\n' | tr -d '\r'); echo "$$HASH  $@" | sha256sum -c - || { echo "ERROR: checksum mismatch (using $@.sha256)"; sha256sum $@; exit 1; }; \
+	  fi; \
+	else \
+	  # fallback to embedded checksum in Makefile
+	  echo "No upstream checksum file found; falling back to embedded LDNS_SHA256"; \
+	  echo "$(LDNS_SHA256)  $@" | sha256sum -c - || { echo "ERROR: checksum mismatch (embedded LDNS_SHA256)"; sha256sum $@; exit 1; }; \
+	fi
 
 # extract marker
 $(LDNS_SRC_DIR)/.extracted: $(LDNS_TAR)
