@@ -7,7 +7,13 @@ LDNS_TAR := ldns-$(LDNS_VER).tar.gz
 LDNS_URL := https://www.nlnetlabs.nl/downloads/ldns/$(LDNS_TAR)
 LDNS_SHA256 := 838b907594baaff1cd767e95466a7745998ae64bc74be038dccc62e2de2e4247
 LDNS_SRC_DIR := $(CURDIR)/ldns-$(LDNS_VER)
+
+# Use BUILD_TOP if provided by the top-level build; otherwise fall back to a local build dir
+ifeq ($(strip $(BUILD_TOP)),)
+BUILD_DIR := $(CURDIR)/build
+else
 BUILD_DIR := $(BUILD_TOP)/user/ldns
+endif
 
 CONFIGURE_ENV = \
 	CC=$(CROSS)gcc \
@@ -48,7 +54,9 @@ all: $(BUILD_DIR)/Makefile
 	$(MAKE) -C $(BUILD_DIR)
 	$(CROSS)strip $(BUILD_DIR)/src/drill/drill
 
-romfs:
+# make sure romfs builds first and fails early if drill isn't built
+romfs: all
+	@test -f $(BUILD_DIR)/src/drill/drill || (echo "ERROR: drill not found at $(BUILD_DIR)/src/drill/drill; check build output" >&2; exit 1)
 	$(INSTALL_BIN) $(BUILD_DIR)/src/drill/drill $(TARGET_DIR)/usr/bin/drill
 	ln -sf drill $(TARGET_DIR)/usr/bin/dig
 
