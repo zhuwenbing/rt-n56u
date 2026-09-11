@@ -20,7 +20,7 @@ CONFIGURE_ENV = \
 CONFIGURE_OPTS = \
 	--host=mipsel-linux-uclibc \
 	--prefix=/usr \
-	--with-drill \
+	--enable-drill \
 	--without-ssl \
 	--disable-shared \
 	--enable-static \
