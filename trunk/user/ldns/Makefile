@@ -1,50 +1,60 @@
-# ldns‑1.7.1 For hanwckf rt‑n56u original firmware
-include $(TOPDIR)/rules.mak
+# Padavan hanwckf rt-n56u trunk/user/ldns/Makefile
+# ldns-1.8.4, build drill and link to dig
+# auto download, checksum, extract
 
-VER := 1.7.1
-DL_FILE := ldns-$(VER).tar.gz
-DL_URL := https://www.nlnetlabs.nl/downloads/ldns/$(DL_FILE)
+LDNS_VER := 1.8.4
+LDNS_TAR := ldns-$(LDNS_VER).tar.gz
+LDNS_URL := https://mirror.ghproxy.com/https://nlnetlabs.nl/downloads/ldns/$(LDNS_TAR)
+LDNS_SHA256 := 58f976f4c347b75c1b815430e80a40687a2671714ab4c4bc6d448b5c4a6cfd45
+LDNS_SRC_DIR := $(CURDIR)/ldns-$(LDNS_VER)
+BUILD_DIR := $(BUILD_TOP)/user/ldns
 
-SRCDIR := $(SRCTMP)/ldns-$(VER)
+CONFIGURE_ENV = \
+	CC=$(CROSS)gcc \
+	CXX=$(CROSS)g++ \
+	AR=$(CROSS)ar \
+	RANLIB=$(CROSS)ranlib \
+	STRIP=$(CROSS)strip \
+	LD=$(CROSS)ld
 
-ifeq ($(CONFIG_FIRMWARE_INCLUDE_LDNS),y)
-ALL_TARGET += build
-INSTALL_TARGET += install
-endif
+CONFIGURE_OPTS = \
+	--host=mipsel-linux-uclibc \
+	--prefix=/usr \
+	--with-drill \
+	--without-ssl \
+	--disable-shared \
+	--enable-static \
+	--disable-python \
+	--disable-gost \
+	--disable-dane
 
-download:
-	[ -d $(DLDIR) ] || mkdir -p $(DLDIR)
-	[ -f $(DLDIR)/$(DL_FILE) ] || $(WGET) $(DL_URL) -O $(DLDIR)/$(DL_FILE)
-	rm -rf $(SRCDIR)
-	mkdir -p $(SRCTMP)
-	tar -xf $(DLDIR)/$(DL_FILE) -C $(SRCTMP)
+# download + sha256 verify
+$(LDNS_TAR):
+	wget -O $@ $(LDNS_URL)
+	echo "$(LDNS_SHA256)  $@" | sha256sum -c
 
-build: download
-	cd $(SRCDIR) && \
-	$(TARGET_CONFIGURE_OPTS) \
-	CFLAGS="$(TARGET_CFLAGS) -Os -D_BSD_SOURCE -D_POSIX_C_SOURCE=200112L -DNO_RECVMMSG" \
-	LDFLAGS="$(TARGET_LDFLAGS) -static --static" \
-	./configure \
-		--host=$(TARGET_HOST) \
-		--prefix=/usr \
-		--sysconfdir=/etc \
-		--disable-shared \
-		--enable-static \
-		--without-pyldns \
-		--disable-examples \
-		--disable-doxygen \
-		--disable-manpages \
-		--without-ssl \
-		--disable-rpath \
-		--disable-gost
+# extract marker
+$(LDNS_SRC_DIR)/.extracted: $(LDNS_TAR)
+	rm -rf $(LDNS_SRC_DIR)
+	tar -xf $(LDNS_TAR)
+	touch $@
 
-	$(MAKE) -C $(SRCDIR)
+# configure
+$(BUILD_DIR)/Makefile: $(LDNS_SRC_DIR)/.extracted
+	mkdir -p $(BUILD_DIR)
+	cd $(BUILD_DIR) && $(CONFIGURE_ENV) $(LDNS_SRC_DIR)/configure $(CONFIGURE_OPTS)
 
-install: build
-	install -D -m 755 $(SRCDIR)/tools/dig/ldns-dig $(ROMFS)/usr/bin/ldns-dig
-	ln -sf ldns-dig $(ROMFS)/usr/bin/dig
+all: $(BUILD_DIR)/Makefile
+	$(MAKE) -C $(BUILD_DIR)
+	$(CROSS)strip $(BUILD_DIR)/src/drill/drill
+
+romfs:
+	$(INSTALL_BIN) $(BUILD_DIR)/src/drill/drill $(TARGET_DIR)/usr/bin/drill
+	ln -sf drill $(TARGET_DIR)/usr/bin/dig
 
 clean:
-	rm -rf $(SRCDIR)
-
-.PHONY: download build install clean
+	rm -rf $(BUILD_DIR)
+	rm -rf $(LDNS_SRC_DIR)
+	rm -f $(LDNS_SRC_DIR)/.extracted
+# uncomment below line if you want clean remove tarball
+#	rm -f $(LDNS_TAR)
